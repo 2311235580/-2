@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短视频去水印小程序</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3CAEA3',
+                        secondary: '#F6F9FC',
+                        accent: '#20639B',
+                        success: '#38C172',
+                        error: '#E3342F',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 自定义动画效果 */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            50% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.8; }
+        }
+        
+        .animate-pulse-ring {
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        
+        .loader {
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 切换页面的动画效果 */
+        .page {
+            transition: all 0.3s ease-in-out;
+        }
+        
+        .page.hidden {
+            display: none;
+            transform: translateY(20px);
+            opacity: 0;
+        }
+        
+        .page.active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        /* 视频进度条样式 */
+        .video-progress {
+            appearance: none;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.3);
+            outline: none;
+        }
+        
+        .video-progress::-webkit-slider-thumb {
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background-color: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        /* 历史记录样式 */
+        .line-clamp-1 {
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-secondary min-h-screen font-sans text-gray-800">
+    <!-- 页面容器 -->
+    <div class="container mx-auto px-4 py-6 max-w-md">
+        
+        <!-- 页面1: 主页/输入页 -->
+        <div id="page-input" class="page active">
+            <!-- Logo和标题 -->
+            <div class="flex flex-col items-center mb-8 mt-8">
+                <div class="w-20 h-20 bg-primary rounded-full flex items-center justify-center mb-4 shadow-lg">
+                    <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h18M3 16h18"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l-8 4 8 4V8z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-center text-gray-800">短视频去水印工具</h1>
+                <p class="text-gray-500 text-center mt-1">便捷去除抖音、快手等平台视频水印</p>
+            </div>
+            
+            <!-- 输入区域 -->
+            <div class="bg-white rounded-2xl p-6 shadow-md mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">粘贴视频分享链接</label>
+                <div class="relative mb-4">
+                    <textarea 
+                        id="link-input" 
+                        class="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                        placeholder="请粘贴短视频分享链接，如：https://v.douyin.com/xxxxx"
+                    ></textarea>
+                    <button 
+                        id="paste-btn" 
+                        class="absolute bottom-3 right-3 bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-200 transition"
+                        onclick="pasteFromClipboard()"
+                    >
+                        <i class="fas fa-paste mr-1"></i>粘贴
+                    </button>
+                </div>
+                
+                <!-- 示例链接 -->
+                <p class="text-xs text-gray-500 mb-4">示例：https://v.douyin.com/xxxx/ 或 https://v.kuaishou.com/xxxx/</p>
+                
+                <!-- 主要按钮 -->
+                <button 
+                    id="process-btn" 
+                    class="w-full bg-gradient-to-r from-primary to-accent text-white py-3 rounded-xl font-medium shadow-md hover:shadow-lg transition transform hover:scale-[1.02] flex items-center justify-center"
+                    onclick="startProcessing()"
+                >
+                    <i class="fas fa-magic mr-2"></i>
+                    去除水印
+                </button>
+            </div>
+            
+            <!-- 操作说明 -->
+            <div class="bg-white rounded-2xl p-5 shadow-md mb-4">
+                <h3 class="font-medium text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                    使用说明
+                </h3>
+                <ol class="space-y-2 text-sm text-gray-600 pl-4">
+                    <li class="flex items-start">
+                        <span class="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 flex-shrink-0 mt-0.5">1</span>
+                        <span>在抖音/快手等APP中，点击"分享"按钮，再选择"复制链接"</span>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 flex-shrink-0 mt-0.5">2</span>
+                        <span>返回本工具，点击"粘贴"按钮或手动粘贴链接</span>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 flex-shrink-0 mt-0.5">3</span>
+                        <span>点击"去除水印"按钮，等待处理完成</span>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2 flex-shrink-0 mt-0.5">4</span>
+                        <span>处理完成后，可预览并保存无水印视频到相册</span>
+                    </li>
+                </ol>
+                <!-- 免责声明 -->
+                <p class="text-xs text-gray-500 mt-4 border-t pt-3">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    <span>本工具仅供个人学习、研究用途，请尊重原创，勿用于商业用途</span>
+                </p>
+            </div>
+            
+            <!-- 历史记录按钮 -->
+            <button 
+                class="w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-medium shadow-sm hover:bg-gray-50 transition flex items-center justify-center mb-4"
+                onclick="goToHistoryPage()"
+            >
+                <i class="fas fa-history mr-2"></i>
+                查看历史记录
+            </button>
+        </div>
+        
+        <!-- 页面2: 处理中页面 -->
+        <div id="page-processing" class="page hidden">
+            <div class="flex flex-col items-center justify-center h-[70vh]">
+                <!-- 加载动画 -->
+                <div class="relative mb-8">
+                    <div class="w-24 h-24 rounded-full border-4 border-primary opacity-25"></div>
+                    <div class="w-24 h-24 rounded-full border-4 border-primary border-t-transparent loader absolute top-0 left-0"></div>
+                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                        <i class="fas fa-film text-primary text-3xl animate-pulse-ring"></i>
+                    </div>
+                </div>
+                
+                <!-- 处理状态文字 -->
+                <h2 class="text-xl font-semibold text-gray-800 mb-2" id="processing-text">正在努力去除水印...</h2>
+                <p class="text-gray-500 text-center mb-10 max-w-xs" id="processing-subtext">
+                    我们正在解析视频并处理，请稍候片刻
+                </p>
+                
+                <!-- 进度条 -->
+                <div class="w-full max-w-xs bg-gray-200 rounded-full h-2.5 mb-6 overflow-hidden">
+                    <div class="bg-primary h-2.5 rounded-full" id="progress-bar" style="width: 0%"></div>
+                </div>
+                
+                <!-- 取消按钮 -->
+                <button 
+                    class="text-gray-500 border border-gray-300 px-6 py-2 rounded-lg hover:bg-gray-50 transition"
+                    onclick="cancelProcessing()"
+                >
+                    取消处理
+                </button>
+            </div>
+        </div>
+        
+        <!-- 页面3: 结果页/预览页 -->
+        <div id="page-result" class="page hidden">
+            <!-- 成功提示 -->
+            <div class="bg-green-50 border border-green-100 rounded-xl p-4 mb-6 flex items-center">
+                <div class="bg-success rounded-full p-2 text-white mr-3">
+                    <i class="fas fa-check text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="font-medium text-success">处理成功！</h3>
+                    <p class="text-sm text-gray-600">视频水印已成功去除，您可以预览并保存</p>
+                </div>
+            </div>
+            
+            <!-- 视频预览区域 -->
+            <div class="bg-black rounded-2xl overflow-hidden mb-6 shadow-lg relative">
+                <!-- 视频播放占位图 -->
+                <div class="aspect-[9/16] bg-gray-900 flex items-center justify-center">
+                    <div class="text-center">
+                        <i class="fas fa-play-circle text-white opacity-70 text-5xl mb-3"></i>
+                        <div class="text-white opacity-70">视频预览</div>
+                    </div>
+                </div>
+                
+                <!-- 视频控制栏 -->
+                <div class="bg-gradient-to-t from-black/60 to-transparent absolute bottom-0 left-0 right-0 p-4">
+                    <!-- 进度条 -->
+                    <input type="range" class="video-progress w-full mb-2" min="0" max="100" value="0">
+                    
+                    <!-- 控制按钮 -->
+                    <div class="flex items-center justify-between text-white">
+                        <div class="flex items-center space-x-3">
+                            <button class="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30">
+                                <i class="fas fa-play text-sm"></i>
+                            </button>
+                            <span class="text-sm">00:12 / 00:35</span>
+                        </div>
+                        <div>
+                            <button class="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30">
+                                <i class="fas fa-expand-alt text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="grid grid-cols-1 gap-4 mb-6">
+                <button 
+                    class="bg-gradient-to-r from-primary to-accent text-white py-4 rounded-xl font-medium shadow-md hover:shadow-lg transition transform hover:scale-[1.02] flex items-center justify-center"
+                    onclick="saveToAlbum()"
+                >
+                    <i class="fas fa-download mr-2"></i>
+                    保存到相册
+                </button>
+                
+                <button 
+                    class="bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-medium shadow-sm hover:bg-gray-50 transition flex items-center justify-center"
+                    onclick="processAnother()"
+                >
+                    <i class="fas fa-redo-alt mr-2"></i>
+                    再处理一个
+                </button>
+            </div>
+            
+            <!-- 分享提示 -->
+            <div class="text-center text-sm text-gray-500">
+                <p>喜欢这个工具？可以分享给朋友哦～</p>
+            </div>
+        </div>
+        
+        <!-- 页面4: 处理失败页面 -->
+        <div id="page-error" class="page hidden">
+            <div class="flex flex-col items-center justify-center h-[70vh]">
+                <!-- 错误图标 -->
+                <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                    <i class="fas fa-exclamation-triangle text-error text-3xl"></i>
+                </div>
+                
+                <!-- 错误提示 -->
+                <h2 class="text-xl font-semibold text-gray-800 mb-2" id="error-title">处理失败</h2>
+                <p class="text-gray-500 text-center mb-8 max-w-xs" id="error-message">
+                    链接格式错误或暂不支持该平台，请确认链接正确后重试
+                </p>
+                
+                <!-- 返回按钮 -->
+                <button 
+                    class="bg-white border border-gray-300 px-6 py-3 rounded-xl hover:bg-gray-50 transition shadow-sm"
+                    onclick="goToInputPage()"
+                >
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    返回首页重试
+                </button>
+            </div>
+        </div>
+        
+        <!-- 页面5: 历史记录页面 -->
+        <div id="page-history" class="page hidden">
+            <!-- 顶部导航栏 -->
+            <div class="flex items-center justify-between mb-6 mt-4">
+                <button 
+                    class="flex items-center text-gray-700"
+                    onclick="goToInputPage()"
+                >
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    返回首页
+                </button>
+                <h2 class="text-xl font-semibold">历史记录</h2>
+                <button 
+                    class="text-gray-500"
+                    onclick="clearHistory()"
+                >
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+            
+            <!-- 历史记录列表 -->
+            <div class="bg-white rounded-2xl shadow-md mb-6">
+                <div id="history-list">
+                    <!-- 这里将通过JavaScript动态生成历史记录 -->
+                </div>
+                
+                <!-- 无历史记录提示 -->
+                <div class="text-center text-gray-500 py-12" id="no-history-msg">
+                    <div class="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fas fa-history text-gray-400 text-2xl"></i>
+                    </div>
+                    <p class="text-gray-600 mb-2">暂无历史记录</p>
+                    <p class="text-xs text-gray-500">处理视频后将自动保存至此</p>
+                </div>
+            </div>
+            
+            <!-- 底部提示 -->
+            <div class="text-center text-xs text-gray-500">
+                <p>最多保存50条历史记录</p>
+                <p class="mt-1">超过限制将自动删除最早的记录</p>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- 交互脚本 -->
+    <script>
+        // 定义历史记录数组
+        let historyRecords = [];
+        const MAX_HISTORY = 50; // 最大记录数
+        
+        // 初始化函数，从本地存储加载历史记录
+        function initApp() {
+            // 从localStorage中获取历史记录
+            const savedHistory = localStorage.getItem('videoHistory');
+            if (savedHistory) {
+                historyRecords = JSON.parse(savedHistory);
+            }
+        }
+        
+        // 在页面加载时初始化
+        window.onload = initApp;
+        
+        // 页面切换函数
+        function switchToPage(pageId) {
+            // 隐藏所有页面
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+                page.classList.add('hidden');
+            });
+            
+            // 显示目标页面
+            const targetPage = document.getElementById(pageId);
+            targetPage.classList.remove('hidden');
+            
+            // 添加一个小延迟，让动画效果更明显
+            setTimeout(() => {
+                targetPage.classList.add('active');
+            }, 50);
+            
+            // 如果切换到历史页面，则刷新历史列表
+            if (pageId === 'page-history') {
+                renderHistoryList();
+            }
+        }
+        
+        // 渲染历史记录列表
+        function renderHistoryList() {
+            const historyListEl = document.getElementById('history-list');
+            const noHistoryMsg = document.getElementById('no-history-msg');
+            
+            // 如果没有历史记录，显示提示信息
+            if (historyRecords.length === 0) {
+                noHistoryMsg.style.display = 'block';
+                // 清空历史列表其他内容
+                historyListEl.innerHTML = '';
+                return;
+            }
+            
+            // 隐藏无历史提示
+            noHistoryMsg.style.display = 'none';
+            
+            // 构建历史记录HTML
+            let historyHTML = '';
+            
+            // 逆序显示历史记录（最新的在前面）
+            for (let i = historyRecords.length - 1; i >= 0; i--) {
+                const record = historyRecords[i];
+                const realIndex = historyRecords.length - 1 - i; // 计算真实索引
+                
+                // 添加一个漂亮的历史记录项
+                historyHTML += `
+                    <div class="border-b border-gray-100 py-3 px-1 last:border-0">
+                        <div class="flex items-start">
+                            <div class="bg-gray-100 rounded-xl h-16 w-20 flex-shrink-0 mr-3 overflow-hidden">
+                                <!-- 视频缩略图或默认图标 -->
+                                <div class="w-full h-full flex items-center justify-center bg-gray-200 relative">
+                                    <img src="${record.thumbnail || ''}" 
+                                        alt="缩略图" class="h-full w-full object-cover absolute inset-0" 
+                                        onerror="this.style.display='none'">
+                                    <i class="fas fa-play-circle text-gray-400 text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-sm font-medium text-gray-800 line-clamp-1">${record.title || '无标题视频'}</h4>
+                                <p class="text-xs text-gray-500 mb-2">
+                                    <span class="inline-block px-1.5 py-0.5 bg-gray-100 rounded-md mr-1">${record.platform}</span>
+                                    <span>${record.date}</span>
+                                </p>
+                                <div class="flex space-x-2">
+                                    <button class="text-xs bg-primary/10 text-primary px-2 py-1 rounded flex items-center" 
+                                        onclick="reprocessVideo(${realIndex})">
+                                        <i class="fas fa-play mr-1"></i>查看
+                                    </button>
+                                    <button class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded flex items-center"
+                                        onclick="deleteHistoryItem(${realIndex})">
+                                        <i class="fas fa-trash-alt mr-1"></i>删除
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            historyListEl.innerHTML = historyHTML;
+        }
+        
+        // 添加新的历史记录
+        function addToHistory(videoData) {
+            // 添加到历史数组开头
+            historyRecords.push(videoData);
+            
+            // 如果超过最大记录数，删除最旧的
+            if (historyRecords.length > MAX_HISTORY) {
+                historyRecords.shift();
+            }
+            
+            // 保存到本地存储
+            saveHistoryToStorage();
+        }
+        
+        // 保存历史记录到localStorage
+        function saveHistoryToStorage() {
+            localStorage.setItem('videoHistory', JSON.stringify(historyRecords));
+        }
+        
+        // 删除单条历史记录
+        function deleteHistoryItem(index) {
+            if (confirm('确定要删除这条记录吗？')) {
+                // 删除指定索引的记录
+                historyRecords.splice(index, 1);
+                saveHistoryToStorage();
+                renderHistoryList();
+            }
+        }
+        
+        // 清空所有历史记录
+        function clearHistory() {
+            if (confirm('确定要清空所有历史记录吗？')) {
+                historyRecords = [];
+                saveHistoryToStorage();
+                renderHistoryList();
+            }
+        }
+        
+        // 重新处理历史记录中的视频
+        function reprocessVideo(index) {
+            // 获取历史记录中的视频数据
+            const videoData = historyRecords[index];
+            
+            // 填充输入框
+            document.getElementById('link-input').value = videoData.url;
+            
+            // 先返回首页
+            switchToPage('page-input');
+            
+            // 延迟一下再自动开始处理，更符合用户体验
+            setTimeout(() => {
+                // 自动点击处理按钮
+                startProcessing();
+            }, 300);
+        }
+        
+        // 跳转到历史记录页面
+        function goToHistoryPage() {
+            switchToPage('page-history');
+        }
+        
+        // 模拟从剪贴板粘贴
+        function pasteFromClipboard() {
+            // 模拟效果，实际应用中需调用剪贴板API
+            const demoLink = "https://v.douyin.com/JXNEpgw/";
+            document.getElementById('link-input').value = demoLink;
+        }
+        
+        // 开始处理
+        function startProcessing() {
+            const linkInput = document.getElementById('link-input').value.trim();
+            
+            // 简单判断链接是否为空
+            if (!linkInput) {
+                alert('请先粘贴视频分享链接');
+                return;
+            }
+            
+            // 切换到处理页面
+            switchToPage('page-processing');
+            
+            // 模拟进度条
+            simulateProgress();
+        }
+        
+        // 模拟进度条
+        function simulateProgress() {
+            let progress = 0;
+            const progressBar = document.getElementById('progress-bar');
+            const processingText = document.getElementById('processing-text');
+            const processingSubtext = document.getElementById('processing-subtext');
+            
+            const interval = setInterval(() => {
+                progress += Math.random() * 10;
+                if (progress > 100) progress = 100;
+                
+                progressBar.style.width = `${progress}%`;
+                
+                // 更新处理状态文本
+                if (progress < 30) {
+                    processingText.textContent = "正在解析链接...";
+                    processingSubtext.textContent = "正在获取视频源地址";
+                } else if (progress < 60) {
+                    processingText.textContent = "正在下载原始视频...";
+                    processingSubtext.textContent = "视频下载中，请耐心等待";
+                } else if (progress < 90) {
+                    processingText.textContent = "正在去除水印...";
+                    processingSubtext.textContent = "视频处理中，即将完成";
+                } else {
+                    processingText.textContent = "处理完成！";
+                    processingSubtext.textContent = "正在准备预览";
+                }
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    
+                    // 完成后延迟显示结果页面
+                    setTimeout(() => {
+                        // 90%概率成功，10%概率失败（仅作演示）
+                        if (Math.random() < 0.9) {
+                            // 添加到历史记录
+                            const videoData = {
+                                title: '示例视频 #' + Math.floor(Math.random() * 1000),
+                                platform: Math.random() > 0.5 ? '抖音' : '快手',
+                                date: new Date().toLocaleDateString(),
+                                thumbnail: '',
+                                url: document.getElementById('link-input').value
+                            };
+                            addToHistory(videoData);
+                            
+                            switchToPage('page-result');
+                        } else {
+                            switchToPage('page-error');
+                        }
+                    }, 1000);
+                }
+            }, 300);
+        }
+        
+        // 取消处理
+        function cancelProcessing() {
+            if (confirm('确定要取消处理吗？')) {
+                switchToPage('page-input');
+            }
+        }
+        
+        // 保存到相册
+        function saveToAlbum() {
+            // 模拟授权请求
+            setTimeout(() => {
+                alert('已成功保存到相册！');
+                
+                // 已经在processing阶段添加了历史记录，这里不需要重复添加
+            }, 1000);
+        }
+        
+        // 再处理一个
+        function processAnother() {
+            // 清空输入框并返回首页
+            document.getElementById('link-input').value = '';
+            switchToPage('page-input');
+        }
+        
+        // 返回输入页面
+        function goToInputPage() {
+            switchToPage('page-input');
+        }
+    </script>
+</body>
+</html>

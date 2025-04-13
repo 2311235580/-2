@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短视频/图文去水印小程序</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4FACFE',
+                        secondary: '#F6F9FC',
+                        accent: '#00F2FE',
+                        success: '#38C172',
+                        error: '#E3342F',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        /* iPhone 手机边框样式 */
+        .iphone-frame {
+            position: relative;
+            width: 375px;
+            height: 812px;
+            background-color: white;
+            border-radius: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 10px #111, 0 0 0 11px #222;
+            overflow: hidden;
+            margin: 30px auto;
+        }
+        
+        /* iPhone 刘海 */
+        .iphone-notch {
+            position: absolute;
+            width: 170px;
+            height: 30px;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #111;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+            z-index: 10;
+        }
+        
+        /* iPhone 底部横条 */
+        .iphone-home-indicator {
+            position: absolute;
+            width: 120px;
+            height: 5px;
+            background-color: #111;
+            border-radius: 3px;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+        
+        /* 主要内容区域 */
+        .iphone-content {
+            position: absolute;
+            top: 30px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            background-color: #F6F9FC;
+        }
+        
+        /* 动画效果 */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            50% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.8; }
+        }
+        
+        .animate-pulse-ring {
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loader {
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+        
+        /* 页面切换动画 */
+        .page {
+            max-width: 100%;
+            min-height: 782px;
+            transition: all 0.3s ease-in-out;
+            position: relative;
+        }
+        
+        .page.hidden {
+            display: none;
+            transform: translateY(20px);
+            opacity: 0;
+        }
+        
+        .page.active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        /* 视频进度条样式 */
+        .video-progress {
+            appearance: none;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.3);
+            outline: none;
+        }
+        
+        .video-progress::-webkit-slider-thumb {
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background-color: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        /* 多行文本截断 */
+        .line-clamp-1 {
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* 按钮动效 */
+        .btn-primary {
+            background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%);
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+        
+        /* 图片滑动区域 */
+        .image-carousel {
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .image-carousel > div {
+            scroll-snap-align: start;
+        }
+        
+        /* 隐藏滚动条但保留功能 */
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        
+        /* 滑动指示器 */
+        .swipe-indicator {
+            width: 40px;
+            height: 5px;
+            border-radius: 3px;
+            background-color: #e0e0e0;
+            margin: 0 auto;
+        }
+        
+        /* 脉冲动画 */
+        .pulse-animation {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        /* 使用说明模块的样式 */
+        .usage-guide {
+            background-color: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            margin-bottom: 16px;
+        }
+        
+        .usage-guide-title {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .usage-guide-step {
+            display: flex;
+            margin-bottom: 10px;
+            align-items: flex-start;
+        }
+        
+        .step-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: #4FACFE;
+            color: white;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .step-text {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+            color: #555;
+        }
+        
+        .usage-disclaimer {
+            font-size: 12px;
+            color: #888;
+            border-top: 1px solid #eee;
+            padding-top: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- iPhone 手机边框 -->
+    <div class="iphone-frame">
+        <div class="iphone-notch"></div>
+        <div class="iphone-home-indicator"></div>
+        <div class="iphone-content">
+            <!-- 页面1: 主页/输入页 -->
+            <div id="page-input" class="page active">
+                <div class="px-5 py-6">
+                    <!-- Logo和标题 -->
+                    <div class="flex flex-col items-center mb-6 mt-2">
+                        <div class="w-16 h-16 bg-gradient-to-r from-primary to-accent rounded-full flex items-center justify-center mb-3 shadow-lg">
+                            <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        <h1 class="text-xl font-bold text-center text-gray-800">去水印助手</h1>
+                        <p class="text-gray-500 text-center text-sm mt-1">支持抖音/快手/小红书等多平台</p>
+                    </div>
+                    
+                    <!-- 输入区域 -->
+                    <div class="bg-white rounded-2xl p-5 shadow-md mb-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">粘贴分享链接</label>
+                        <div class="relative mb-4">
+                            <textarea 
+                                id="link-input" 
+                                class="w-full h-24 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                                placeholder="请粘贴短视频或图文分享链接，如：https://v.douyin.com/xxxxx"
+                            ></textarea>
+                            <button 
+                                id="paste-btn" 
+                                class="absolute bottom-3 right-3 bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-200 transition"
+                            >
+                                <i class="fas fa-paste mr-1"></i>粘贴
+                            </button>
+                        </div>
+                        
+                        <!-- 示例链接 -->
+                        <p class="text-xs text-gray-500 mb-4">例如：复制抖音/快手/小红书的分享链接粘贴到这里</p>
+                        
+                        <!-- 主要按钮 -->
+                        <button 
+                            id="process-btn" 
+                            class="w-full btn-primary text-white py-3 rounded-xl font-medium shadow-md hover:shadow-lg transition flex items-center justify-center"
+                        >
+                            <i class="fas fa-magic mr-2"></i>
+                            一键去水印
+                        </button>
+                    </div>
+                    
+                    <!-- 使用说明模块 -->
+                    <div class="usage-guide">
+                        <div class="usage-guide-title">
+                            <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                            使用说明
+                        </div>
+                        <div class="usage-guide-step">
+                            <div class="step-number">1</div>
+                            <div class="step-text">在抖音/快手等APP中，点击"分享"按钮，再选择"复制链接"</div>
+                        </div>
+                        <div class="usage-guide-step">
+                            <div class="step-number">2</div>
+                            <div class="step-text">返回本工具，点击"粘贴"按钮或手动粘贴链接</div>
+                        </div>
+                        <div class="usage-guide-step">
+                            <div class="step-number">3</div>
+                            <div class="step-text">点击"去除水印"按钮，等待处理完成</div>
+                        </div>
+                        <div class="usage-guide-step">
+                            <div class="step-number">4</div>
+                            <div class="step-text">处理完成后，可预览并保存无水印视频到相册</div>
+                        </div>
+                        <div class="usage-disclaimer">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            <span>本工具仅供个人学习、研究用途，请尊重原创，勿用于商业用途</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 历史记录按钮 -->
+                    <button 
+                        id="history-btn" 
+                        class="w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-medium shadow-sm hover:bg-gray-50 transition flex items-center justify-center mb-4 mt-5"
+                    >
+                        <i class="fas fa-history mr-2"></i>
+                        历史记录
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 页面2: 加载状态页 -->
+            <div id="page-loading" class="page hidden">
+                <div class="px-5 py-6">
+                    <div class="flex flex-col items-center justify-center h-[70vh]">
+                        <!-- 加载动画 -->
+                        <div class="relative mb-8">
+                            <div class="w-24 h-24 rounded-full border-4 border-primary opacity-25"></div>
+                            <div class="w-24 h-24 rounded-full border-4 border-primary border-t-transparent loader absolute top-0 left-0"></div>
+                            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                                <i class="fas fa-video text-primary text-3xl animate-pulse-ring"></i>
+                            </div>
+                        </div>
+                        
+                        <!-- 加载状态文字 -->
+                        <h2 class="text-lg font-medium text-gray-800 mb-2">正在努力解析中</h2>
+                        <p class="text-gray-500 text-center mb-6">请稍候，这可能需要几秒钟...</p>
+                        
+                        <!-- 进度条 -->
+                        <div class="w-full max-w-xs bg-gray-200 rounded-full h-2.5 mb-4 overflow-hidden">
+                            <div class="bg-primary h-2.5 rounded-full pulse-animation" id="progress-bar" style="width: 70%"></div>
+                        </div>
+                        <p class="text-xs text-gray-500">解析链接中，请勿关闭页面</p>
+                        
+                        <!-- 取消按钮 -->
+                        <button 
+                            id="cancel-btn" 
+                            class="mt-12 text-gray-500 border border-gray-300 px-6 py-2 rounded-lg hover:bg-gray-50 transition"
+                        >
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 页面3: 视频结果页 -->
+            <div id="page-video" class="page hidden">
+                <div class="px-5 py-6">
+                    <!-- 顶部导航 -->
+                    <header class="flex items-center mb-6">
+                        <button id="back-from-video-btn" class="text-gray-700 mr-2">
+                            <i class="fas fa-arrow-left text-lg"></i>
+                        </button>
+                        <h1 class="text-xl font-bold text-gray-800 flex-1 truncate">视频内容</h1>
+                    </header>
+                    
+                    <!-- 视频信息卡片 -->
+                    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                        <h2 id="video-title" class="text-base font-medium text-gray-800 mb-2 line-clamp-2">这是一个抖音短视频的示例标题，展示了标题的样式和长度限制</h2>
+                        <p class="text-xs text-gray-500 mb-2 flex items-center">
+                            <i class="fab fa-tiktok mr-1"></i> 
+                            来自抖音 • 解析成功
+                        </p>
+                    </div>
+                    
+                    <!-- 视频播放区域 -->
+                    <div class="rounded-lg overflow-hidden bg-black mb-6 relative aspect-[9/16]">
+                        <video id="video-player" controls class="w-full h-full object-contain">
+                            <source src="#" type="video/mp4">
+                            您的浏览器不支持 HTML5 视频。
+                        </video>
+                    </div>
+                    
+                    <!-- 操作按钮组 -->
+                    <div class="mb-2">
+                        <button id="save-video-btn" class="btn-primary text-white py-3 rounded-lg font-medium shadow-md w-full flex justify-center items-center">
+                            <i class="fas fa-download mr-2"></i> 保存到相册
+                        </button>
+                    </div>
+                    
+                    <!-- 再次解析按钮 -->
+                    <button id="new-parse-btn" class="w-full border border-primary text-primary py-3 rounded-lg font-medium transition mb-2 flex items-center justify-center">
+                        <i class="fas fa-redo-alt mr-2"></i> 再次解析
+                    </button>
+                </div>
+            </div>
+
+            <!-- 页面4: 小红书图文结果页 -->
+            <div id="page-xhs" class="page hidden">
+                <div class="px-5 py-6">
+                    <!-- 顶部导航 -->
+                    <header class="flex items-center mb-6">
+                        <button id="back-from-xhs-btn" class="text-gray-700 mr-2">
+                            <i class="fas fa-arrow-left text-lg"></i>
+                        </button>
+                        <h1 class="text-xl font-bold text-gray-800 flex-1 truncate">图文内容</h1>
+                    </header>
+                    
+                    <!-- 笔记信息卡片 -->
+                    <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                        <h2 id="xhs-title" class="text-base font-medium text-gray-800 mb-2 line-clamp-2">这是一个小红书图文的示例标题，可以展示笔记的主题内容</h2>
+                        <p class="text-xs text-gray-500 mb-2 flex items-center">
+                            <i class="fas fa-book-open mr-1"></i> 
+                            来自小红书 • 解析成功
+                        </p>
+                    </div>
+                    
+                    <!-- 图片滑动区域 -->
+                    <div class="mb-4 relative">
+                        <div class="swipe-indicator my-2"></div>
+                        <div class="rounded-lg overflow-hidden bg-gray-100 shadow-sm">
+                            <div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar image-carousel">
+                                <div class="flex-shrink-0 w-full snap-center">
+                                    <img src="https://via.placeholder.com/800x1000" class="w-full object-contain" alt="图片1">
+                                </div>
+                                <div class="flex-shrink-0 w-full snap-center">
+                                    <img src="https://via.placeholder.com/800x1000" class="w-full object-contain" alt="图片2">
+                                </div>
+                                <div class="flex-shrink-0 w-full snap-center">
+                                    <img src="https://via.placeholder.com/800x1000" class="w-full object-contain" alt="图片3">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-center mt-2">
+                            <div class="w-2 h-2 rounded-full bg-primary mx-1"></div>
+                            <div class="w-2 h-2 rounded-full bg-gray-300 mx-1"></div>
+                            <div class="w-2 h-2 rounded-full bg-gray-300 mx-1"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作按钮组 -->
+                    <div class="mb-4">
+                        <button id="save-images-btn" class="btn-primary text-white py-3 rounded-lg font-medium shadow-md w-full flex justify-center items-center">
+                            <i class="fas fa-download mr-2"></i> 保存全部图片
+                        </button>
+                    </div>
+                    
+                    <!-- 文字内容区域 -->
+                    <div class="bg-white rounded-lg shadow-sm p-4 mb-2">
+                        <h3 class="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                            <i class="fas fa-align-left mr-2 text-gray-500"></i> 文字内容
+                        </h3>
+                        <div id="content-text" class="text-sm text-gray-800 mb-4 leading-relaxed">
+                            这是小红书笔记的文字内容示例。段落文字内容可以有多行，这里展示的是文字的样式和排版效果。
+                            <br><br>
+                            用户可以查看完整的文字内容，并且可以使用下方的复制按钮一键复制全部文字内容，方便保存和分享。
+                            <br><br>
+                            #这里是话题标签示例 #小红书
+                        </div>
+                        <button id="copy-text-btn" class="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg text-sm font-medium w-full flex items-center justify-center">
+                            <i class="fas fa-copy mr-2"></i> 复制全部文字
+                        </button>
+                    </div>
+                    
+                    <!-- 再次解析按钮 -->
+                    <button id="new-xhs-parse-btn" class="w-full border border-primary text-primary py-3 rounded-lg font-medium transition mb-2 flex items-center justify-center">
+                        <i class="fas fa-redo-alt mr-2"></i> 再次解析
+                    </button>
+                </div>
+            </div>
+
+            <!-- 页面5: 历史记录页 -->
+            <div id="page-history" class="page hidden">
+                <div class="px-5 py-6">
+                    <!-- 顶部导航 -->
+                    <header class="flex items-center justify-between mb-6">
+                        <button id="back-from-history-btn" class="text-gray-700 mr-2">
+                            <i class="fas fa-arrow-left text-lg"></i>
+                        </button>
+                        <h1 class="text-xl font-bold text-gray-800">历史记录</h1>
+                        <button id="clear-history-btn" class="text-sm text-red-500">
+                            清空记录
+                        </button>
+                    </header>
+                    
+                    <p class="text-xs text-gray-500 mb-4">仅显示最近50条成功解析的记录</p>
+                    
+                    <!-- 历史记录列表 -->
+                    <div class="space-y-3 mb-8">
+                        <!-- 历史记录项目1 -->
+                        <div class="bg-white rounded-lg shadow-sm p-4">
+                            <div class="flex items-start mb-2">
+                                <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500 mr-2 flex-shrink-0">
+                                    <i class="fab fa-tiktok"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="text-sm font-medium text-gray-800 mb-1 line-clamp-1">抖音视频标题示例，这是一个长标题示例</h3>
+                                    <p class="text-xs text-gray-500">2025-04-13 14:30</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="bg-gray-100 text-gray-700 py-1.5 px-3 rounded text-xs font-medium flex-1 flex items-center justify-center">
+                                    <i class="fas fa-copy mr-1"></i> 复制链接
+                                </button>
+                                <button class="bg-blue-50 text-primary py-1.5 px-3 rounded text-xs font-medium flex-1 flex items-center justify-center">
+                                    <i class="fas fa-redo-alt mr-1"></i> 重新解析
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 历史记录项目2 -->
+                        <div class="bg-white rounded-lg shadow-sm p-4">
+                            <div class="flex items-start mb-2">
+                                <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500 mr-2 flex-shrink-0">
+                                    <i class="fas fa-book-open"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="text-sm font-medium text-gray-800 mb-1 line-clamp-1">小红书笔记示例标题</h3>
+                                    <p class="text-xs text-gray-500">2025-04-13 10:15</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="bg-gray-100 text-gray-700 py-1.5 px-3 rounded text-xs font-medium flex-1 flex items-center justify-center">
+                                    <i class="fas fa-copy mr-1"></i> 复制链接
+                                </button>
+                                <button class="bg-blue-50 text-primary py-1.5 px-3 rounded text-xs font-medium flex-1 flex items-center justify-center">
+                                    <i class="fas fa-redo-alt mr-1"></i> 重新解析
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 历史记录项目3 -->
+                        <div class="bg-white rounded-lg shadow-sm p-4">
+                            <div class="flex items-start mb-2">
+                                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 mr-2 flex-shrink-0">
+                                    <i class="fas fa-play"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="text-sm font-medium text-gray-800 mb-1 line-clamp-1">快手视频示例标题</h3>
+                                    <p class="text-xs text-gray-500">2025-04-12 18:45</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="bg-gray-100 text-gray-700 py-1.5 px-3 rounded text-xs font-medium flex-1 flex items-center justify-center">
+                                    <i class="fas fa-copy mr-1"></i> 复制链接
+                                </button>
+                                <button class="bg-blue-50 text-primary py-1.5 px-3 rounded text-xs font-medium flex-1 flex items-center justify-center">
+                                    <i class="fas fa-redo-alt mr-1"></i> 重新解析
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 页面6: 错误提示页 -->
+            <div id="page-error" class="page hidden">
+                <div class="px-5 py-6">
+                    <div class="flex flex-col items-center justify-center h-[70vh]">
+                        <!-- 错误图标 -->
+                        <div class="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center text-red-500 mx-auto mb-6">
+                            <i class="fas fa-exclamation-triangle text-2xl"></i>
+                        </div>
+                        <h2 class="text-lg font-medium text-gray-800 mb-2">解析失败</h2>
+                        <p id="error-message" class="text-gray-500 text-sm mb-6 text-center max-w-xs">抱歉，无法解析此链接，请确保链接格式正确或尝试其他链接</p>
+                        
+                        <!-- 重试按钮 -->
+                        <button id="try-again-btn" class="btn-primary text-white py-3 rounded-lg font-medium shadow-md w-full max-w-xs mb-4 flex items-center justify-center">
+                            <i class="fas fa-redo-alt mr-2"></i> 重新尝试
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 页面切换逻辑
+        const pages = {
+            input: document.getElementById('page-input'),
+            loading: document.getElementById('page-loading'),
+            video: document.getElementById('page-video'),
+            xhs: document.getElementById('page-xhs'),
+            history: document.getElementById('page-history'),
+            error: document.getElementById('page-error')
+        };
+
+        function showPage(pageId) {
+            Object.keys(pages).forEach(key => {
+                if (key === pageId) {
+                    pages[key].classList.remove('hidden');
+                    setTimeout(() => {
+                        pages[key].classList.add('active');
+                    }, 50);
+                } else {
+                    pages[key].classList.remove('active');
+                    setTimeout(() => {
+                        pages[key].classList.add('hidden');
+                    }, 300);
+                }
+            });
+        }
+
+        // 粘贴/清除按钮逻辑
+        const linkInput = document.getElementById('link-input');
+        const pasteBtn = document.getElementById('paste-btn');
+        
+        linkInput.addEventListener('input', updatePasteButton);
+        
+        function updatePasteButton() {
+            if (linkInput.value.trim() === '') {
+                pasteBtn.innerHTML = '<i class="fas fa-paste mr-1"></i>粘贴';
+                pasteBtn.onclick = handlePaste;
+            } else {
+                pasteBtn.innerHTML = '<i class="fas fa-times mr-1"></i>清除';
+                pasteBtn.onclick = handleClear;
+            }
+        }
+        
+        function handlePaste() {
+            // 模拟粘贴操作
+            linkInput.value = 'https://v.douyin.com/sample-link/';
+            updatePasteButton();
+        }
+        
+        function handleClear() {
+            linkInput.value = '';
+            updatePasteButton();
+        }
+        
+        // 初始状态
+        updatePasteButton();
+
+        // 模拟解析过程
+        function simulateProgress() {
+            let progress = 0;
+            const progressBar = document.getElementById('progress-bar');
+            
+            const interval = setInterval(() => {
+                progress += 10;
+                if (progress > 100) {
+                    clearInterval(interval);
+                    
+                    // 随机决定展示视频或小红书结果页
+                    const resultPage = Math.random() > 0.5 ? 'video' : 'xhs';
+                    
+                    // 随机决定成功或失败（90%成功率）
+                    if (Math.random() < 0.9) {
+                        showPage(resultPage);
+                    } else {
+                        showPage('error');
+                    }
+                } else {
+                    progressBar.style.width = `${progress}%`;
+                }
+            }, 200);
+        }
+
+        // 按钮事件绑定
+        document.getElementById('process-btn').addEventListener('click', () => {
+            if (linkInput.value.trim() === '') {
+                alert('请粘贴分享链接');
+                return;
+            }
+            showPage('loading');
+            simulateProgress();
+        });
+
+        // 历史记录按钮
+        document.getElementById('history-btn').addEventListener('click', () => {
+            showPage('history');
+        });
+
+        // 返回按钮
+        document.getElementById('back-from-video-btn').addEventListener('click', () => {
+            showPage('input');
+        });
+
+        document.getElementById('back-from-xhs-btn').addEventListener('click', () => {
+            showPage('input');
+        });
+
+        document.getElementById('back-from-history-btn').addEventListener('click', () => {
+            showPage('input');
+        });
+
+        // 再次解析按钮
+        document.getElementById('new-parse-btn').addEventListener('click', () => {
+            showPage('input');
+        });
+
+        document.getElementById('new-xhs-parse-btn').addEventListener('click', () => {
+            showPage('input');
+        });
+
+        document.getElementById('try-again-btn').addEventListener('click', () => {
+            showPage('input');
+        });
+
+        // 取消按钮
+        document.getElementById('cancel-btn').addEventListener('click', () => {
+            showPage('input');
+        });
+
+        // 清空历史记录
+        document.getElementById('clear-history-btn').addEventListener('click', function() {
+            if (confirm('确定要清空所有历史记录吗？')) {
+                // 模拟清空历史记录
+                alert('历史记录已清空');
+            }
+        });
+
+        // 模拟操作反馈
+        document.getElementById('save-video-btn').addEventListener('click', function() {
+            this.innerHTML = '<i class="fas fa-check mr-2"></i> 已保存';
+            this.classList.add('bg-success');
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-download mr-2"></i> 保存到相册';
+                this.classList.remove('bg-success');
+            }, 2000);
+        });
+
+        document.getElementById('save-images-btn').addEventListener('click', function() {
+            this.innerHTML = '<i class="fas fa-check mr-2"></i> 已保存';
+            this.classList.add('bg-success');
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-download mr-2"></i> 保存全部图片';
+                this.classList.remove('bg-success');
+            }, 2000);
+        });
+
+        document.getElementById('copy-text-btn').addEventListener('click', function() {
+            this.innerHTML = '<i class="fas fa-check mr-2"></i> 已复制';
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-copy mr-2"></i> 复制全部文字';
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
